@@ -1659,6 +1659,7 @@
                 this.setupTavernWall();
                 this.setupCandles();
                 this.setupTavernProps();
+                this.setupInteractiveObjects();
             }
 
             setupTavernWall() {
@@ -1905,6 +1906,247 @@
                 this.scene.add(bottleGroup);
             }
 
+            setupInteractiveObjects() {
+                this.interactiveObjects = [];
+
+                // Create material for objects
+                const objectMaterial = new CANNON.Material('object');
+                this.world.addContactMaterial(new CANNON.ContactMaterial(objectMaterial, this.tableMaterial, {
+                    friction: 0.5,
+                    restitution: 0.4
+                }));
+                this.world.addContactMaterial(new CANNON.ContactMaterial(objectMaterial, this.dieMaterial, {
+                    friction: 0.3,
+                    restitution: 0.3
+                }));
+                this.world.addContactMaterial(new CANNON.ContactMaterial(objectMaterial, objectMaterial, {
+                    friction: 0.4,
+                    restitution: 0.35
+                }));
+                this.objectMaterial = objectMaterial;
+
+                // Create 3 goblets on the table
+                const gobletPositions = [
+                    { x: -3, z: 2.5 },
+                    { x: 3.5, z: -2 },
+                    { x: -2.5, z: -3 }
+                ];
+
+                gobletPositions.forEach((pos, idx) => {
+                    const goblet = this.createGoblet(pos.x, pos.z, idx);
+                    this.interactiveObjects.push(goblet);
+                });
+
+                // Create gold coins scattered on table
+                const coinPositions = [
+                    { x: 2, z: 3 },
+                    { x: 2.3, z: 3.2 },
+                    { x: 1.8, z: 3.3 },
+                    { x: -3.5, z: 1 },
+                    { x: -3.3, z: 1.2 },
+                    { x: 4, z: 1.5 },
+                    { x: 4.2, z: 1.3 }
+                ];
+
+                coinPositions.forEach((pos, idx) => {
+                    const coin = this.createCoin(pos.x, pos.z, idx);
+                    this.interactiveObjects.push(coin);
+                });
+
+                // Create a book on the table
+                const book = this.createBook(-1, -2);
+                this.interactiveObjects.push(book);
+            }
+
+            createGoblet(x, z, index) {
+                const gobletGroup = new THREE.Group();
+
+                // Goblet cup (glass material)
+                const cupGeo = new THREE.CylinderGeometry(0.15, 0.1, 0.25, 16);
+                const glassMat = new THREE.MeshPhysicalMaterial({
+                    color: 0x88ccff,
+                    roughness: 0.05,
+                    metalness: 0.1,
+                    transmission: 0.9,
+                    thickness: 0.5,
+                    envMap: this.envMap,
+                    transparent: true,
+                    opacity: 0.6,
+                    clearcoat: 1.0
+                });
+                const cup = new THREE.Mesh(cupGeo, glassMat);
+                cup.position.y = 0.125;
+                cup.castShadow = true;
+                gobletGroup.add(cup);
+
+                // Goblet stem
+                const stemGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.15, 12);
+                const goldMat = new THREE.MeshStandardMaterial({
+                    color: 0xd4af37,
+                    roughness: 0.3,
+                    metalness: 0.9,
+                    envMapIntensity: 1.5
+                });
+                const stem = new THREE.Mesh(stemGeo, goldMat);
+                stem.position.y = -0.075;
+                stem.castShadow = true;
+                gobletGroup.add(stem);
+
+                // Goblet base
+                const baseGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.03, 16);
+                const base = new THREE.Mesh(baseGeo, goldMat);
+                base.position.y = -0.165;
+                base.castShadow = true;
+                gobletGroup.add(base);
+
+                // Wine inside (optional detail)
+                if (index === 0) {
+                    const wineGeo = new THREE.CylinderGeometry(0.14, 0.09, 0.18, 16);
+                    const wineMat = new THREE.MeshStandardMaterial({
+                        color: 0x722f37,
+                        roughness: 0.2,
+                        metalness: 0.1,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const wine = new THREE.Mesh(wineGeo, wineMat);
+                    wine.position.y = 0.09;
+                    gobletGroup.add(wine);
+                }
+
+                gobletGroup.position.set(x, 0.35, z);
+                this.scene.add(gobletGroup);
+
+                // Physics body
+                const bodyShape = new CANNON.Cylinder(0.15, 0.1, 0.35, 8);
+                const body = new CANNON.Body({
+                    mass: 0.3,
+                    material: this.objectMaterial,
+                    linearDamping: 0.3,
+                    angularDamping: 0.3
+                });
+                body.addShape(bodyShape);
+                body.position.set(x, 0.35, z);
+                this.world.addBody(body);
+
+                return {
+                    type: 'goblet',
+                    mesh: gobletGroup,
+                    body: body,
+                    breakable: true,
+                    broken: false,
+                    glassMat: glassMat
+                };
+            }
+
+            createCoin(x, z, index) {
+                const coinGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.02, 20);
+                const coinMat = new THREE.MeshStandardMaterial({
+                    color: 0xffd700,
+                    roughness: 0.4,
+                    metalness: 0.95,
+                    envMapIntensity: 2.0
+                });
+                const coin = new THREE.Mesh(coinGeo, coinMat);
+
+                // Add some embossing detail
+                const detailGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.022, 16);
+                const detailMat = new THREE.MeshStandardMaterial({
+                    color: 0xe6be8a,
+                    roughness: 0.5,
+                    metalness: 0.9
+                });
+                const detail = new THREE.Mesh(detailGeo, detailMat);
+                coin.add(detail);
+
+                // Stack coins slightly
+                const yPos = 0.3 + (index % 3) * 0.025;
+                coin.position.set(x, yPos, z);
+                coin.castShadow = true;
+                this.scene.add(coin);
+
+                // Physics body
+                const bodyShape = new CANNON.Cylinder(0.12, 0.12, 0.02, 8);
+                const body = new CANNON.Body({
+                    mass: 0.05,
+                    material: this.objectMaterial,
+                    linearDamping: 0.5,
+                    angularDamping: 0.5
+                });
+                body.addShape(bodyShape);
+                body.position.set(x, yPos, z);
+                body.quaternion.setFromEuler(Math.PI / 2, 0, Math.random() * Math.PI);
+                this.world.addBody(body);
+
+                return {
+                    type: 'coin',
+                    mesh: coin,
+                    body: body,
+                    breakable: false
+                };
+            }
+
+            createBook(x, z) {
+                const bookGroup = new THREE.Group();
+
+                // Book cover
+                const coverGeo = new THREE.BoxGeometry(0.5, 0.08, 0.7);
+                const coverMat = new THREE.MeshStandardMaterial({
+                    color: 0x8b0000,
+                    roughness: 0.9,
+                    metalness: 0,
+                    normalScale: new THREE.Vector2(0.5, 0.5)
+                });
+                const cover = new THREE.Mesh(coverGeo, coverMat);
+                cover.castShadow = true;
+                bookGroup.add(cover);
+
+                // Pages (slight offset for realism)
+                const pagesGeo = new THREE.BoxGeometry(0.48, 0.06, 0.68);
+                const pagesMat = new THREE.MeshStandardMaterial({
+                    color: 0xf5e6c8,
+                    roughness: 0.8
+                });
+                const pages = new THREE.Mesh(pagesGeo, pagesMat);
+                pages.position.set(0.01, 0, 0);
+                bookGroup.add(pages);
+
+                // Gold decoration on cover
+                const decorGeo = new THREE.BoxGeometry(0.02, 0.085, 0.4);
+                const decorMat = new THREE.MeshStandardMaterial({
+                    color: 0xd4af37,
+                    roughness: 0.3,
+                    metalness: 0.9
+                });
+                const decor = new THREE.Mesh(decorGeo, decorMat);
+                decor.position.set(0, 0.001, 0);
+                bookGroup.add(decor);
+
+                bookGroup.position.set(x, 0.34, z);
+                bookGroup.rotation.y = Math.PI / 6;
+                this.scene.add(bookGroup);
+
+                // Physics body
+                const bodyShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.04, 0.35));
+                const body = new CANNON.Body({
+                    mass: 0.5,
+                    material: this.objectMaterial,
+                    linearDamping: 0.6,
+                    angularDamping: 0.6
+                });
+                body.addShape(bodyShape);
+                body.position.set(x, 0.34, z);
+                body.quaternion.setFromEuler(0, Math.PI / 6, 0);
+                this.world.addBody(body);
+
+                return {
+                    type: 'book',
+                    mesh: bookGroup,
+                    body: body,
+                    breakable: false
+                };
+            }
+
             updateCandles(time) {
                 if (!this.candles) return;
 
@@ -2126,6 +2368,153 @@
                 rumble.stop(now + 0.5);
             }
 
+            playCoinSound() {
+                if (!this.audioCtx) return;
+                const ctx = this.audioCtx, now = ctx.currentTime;
+
+                // Metallic clink
+                [0, 0.02, 0.04].forEach((offset, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800 + i * 200, now + offset);
+                    osc.frequency.exponentialRampToValueAtTime(600 + i * 100, now + offset + 0.1);
+                    gain.gain.setValueAtTime(0.15, now + offset);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.15);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + offset);
+                    osc.stop(now + offset + 0.2);
+                });
+            }
+
+            playObjectThrowSound() {
+                if (!this.audioCtx) return;
+                const ctx = this.audioCtx, now = ctx.currentTime;
+                const noise = ctx.createBufferSource();
+                const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < data.length; i++) data[i] = (Math.random() - 0.5) * 2;
+                noise.buffer = buffer;
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(800, now);
+                filter.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                noise.start(now);
+            }
+
+            playGlassBreakSound() {
+                if (!this.audioCtx) return;
+                const ctx = this.audioCtx, now = ctx.currentTime;
+
+                // Glass shatter - high frequency noise burst
+                const noise = ctx.createBufferSource();
+                const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.4, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < data.length; i++) {
+                    data[i] = (Math.random() - 0.5) * (1 - i / data.length);
+                }
+                noise.buffer = buffer;
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 2000;
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(ctx.destination);
+                noise.start(now);
+
+                // Crystalline tones
+                [2000, 2500, 3000, 3500].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const oscGain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now);
+                    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.2);
+                    oscGain.gain.setValueAtTime(0.1, now + i * 0.02);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25 + i * 0.02);
+                    osc.connect(oscGain);
+                    oscGain.connect(ctx.destination);
+                    osc.start(now + i * 0.02);
+                    osc.stop(now + 0.3 + i * 0.02);
+                });
+            }
+
+            breakObject(obj) {
+                if (obj.broken || !obj.breakable) return;
+                obj.broken = true;
+
+                const pos = obj.mesh.position.clone();
+                this.playGlassBreakSound();
+
+                // Create glass shards
+                this.createGlassShards(pos);
+
+                // Remove the object
+                this.scene.remove(obj.mesh);
+                this.world.removeBody(obj.body);
+            }
+
+            createGlassShards(position) {
+                const shardCount = 15;
+                const shards = [];
+
+                for (let i = 0; i < shardCount; i++) {
+                    // Random shard geometry
+                    const size = 0.05 + Math.random() * 0.1;
+                    const geo = new THREE.TetrahedronGeometry(size, 0);
+                    const mat = new THREE.MeshPhysicalMaterial({
+                        color: 0x88ccff,
+                        roughness: 0.1,
+                        metalness: 0.1,
+                        transmission: 0.8,
+                        thickness: 0.3,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+                    const shard = new THREE.Mesh(geo, mat);
+                    shard.position.copy(position);
+                    shard.position.y += Math.random() * 0.2;
+                    shard.castShadow = true;
+                    this.scene.add(shard);
+
+                    // Physics for shard
+                    const body = new CANNON.Body({
+                        mass: 0.02,
+                        shape: new CANNON.Sphere(size),
+                        material: this.objectMaterial
+                    });
+                    body.position.copy(shard.position);
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 3 + Math.random() * 5;
+                    body.velocity.set(
+                        Math.cos(angle) * speed,
+                        3 + Math.random() * 4,
+                        Math.sin(angle) * speed
+                    );
+                    body.angularVelocity.set(
+                        (Math.random() - 0.5) * 20,
+                        (Math.random() - 0.5) * 20,
+                        (Math.random() - 0.5) * 20
+                    );
+                    this.world.addBody(body);
+
+                    shards.push({ mesh: shard, body: body, life: 3.0 });
+                }
+
+                // Store shards for cleanup
+                if (!this.glassShards) this.glassShards = [];
+                this.glassShards.push(...shards);
+            }
+
             setupEvents() {
                 const canvas = this.renderer.domElement;
                 this.raycaster = new THREE.Raycaster();
@@ -2136,6 +2525,10 @@
                 this.lastDragPos = new THREE.Vector3();
                 this.velocityHistory = [];
                 this.isHoveringDie = false;
+                this.isHoveringObject = false;
+                this.draggedObject = null;
+                this.lastClickTime = 0;
+                this.lastClickedObject = null;
 
                 canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
                 canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
@@ -2171,20 +2564,71 @@
             }
 
             updateCursor() {
-                this.renderer.domElement.style.cursor = this.isDragging ? 'grabbing' : (this.isHoveringDie ? 'grab' : 'default');
+                this.renderer.domElement.style.cursor = this.isDragging ? 'grabbing' : ((this.isHoveringDie || this.isHoveringObject) ? 'grab' : 'default');
             }
 
             checkDieHover() {
                 if (this.isDragging) return;
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 this.isHoveringDie = this.dice.some(die => this.raycaster.intersectObject(die.mesh, true).length > 0);
+
+                // Check for hovering over interactive objects
+                if (this.interactiveObjects) {
+                    this.isHoveringObject = this.interactiveObjects.some(obj =>
+                        !obj.broken && this.raycaster.intersectObject(obj.mesh, true).length > 0
+                    );
+                }
+
                 this.updateCursor();
             }
 
             onMouseDown(e) {
-                if (!this.canRoll || this.cameraAnimating) return;
+                if (this.cameraAnimating) return;
                 this.updateMousePosition(e);
                 this.raycaster.setFromCamera(this.mouse, this.camera);
+
+                // Check for interactive objects first
+                let hitObject = null;
+                if (this.interactiveObjects) {
+                    for (const obj of this.interactiveObjects) {
+                        if (!obj.broken && this.raycaster.intersectObject(obj.mesh, true).length > 0) {
+                            hitObject = obj;
+                            break;
+                        }
+                    }
+                }
+
+                if (hitObject) {
+                    // Check for double-click on breakable objects
+                    const now = Date.now();
+                    if (hitObject.breakable && this.lastClickedObject === hitObject && now - this.lastClickTime < 300) {
+                        this.breakObject(hitObject);
+                        this.lastClickTime = 0;
+                        this.lastClickedObject = null;
+                        return;
+                    }
+                    this.lastClickTime = now;
+                    this.lastClickedObject = hitObject;
+
+                    // Start dragging the object
+                    this.isDragging = true;
+                    this.draggedObject = hitObject;
+                    this.updateCursor();
+                    this.dragPlane.set(new THREE.Vector3(0, 1, 0), -hitObject.mesh.position.y);
+                    const planeIntersect = new THREE.Vector3();
+                    this.raycaster.ray.intersectPlane(this.dragPlane, planeIntersect);
+                    this.dragOffset.copy(hitObject.mesh.position).sub(planeIntersect);
+                    this.lastDragPos.copy(planeIntersect);
+                    this.velocityHistory = [];
+                    hitObject.body.wakeUp();
+                    hitObject.body.velocity.set(0, 0, 0);
+                    hitObject.body.angularVelocity.set(0, 0, 0);
+                    hitObject.body.type = CANNON.Body.KINEMATIC;
+                    return;
+                }
+
+                // Original dice interaction
+                if (!this.canRoll) return;
                 let hitDie = null;
                 for (const die of this.dice) {
                     if (this.raycaster.intersectObject(die.mesh, true).length > 0) { hitDie = die; break; }
@@ -2216,10 +2660,30 @@
             onMouseMove(e) {
                 this.updateMousePosition(e);
                 if (!this.isDragging) { this.checkDieHover(); return; }
-                if (!this.draggedDie) return;
+
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 const planeIntersect = new THREE.Vector3();
                 this.raycaster.ray.intersectPlane(this.dragPlane, planeIntersect);
+
+                // Handle object dragging
+                if (this.draggedObject) {
+                    if (planeIntersect) {
+                        const newPos = planeIntersect.clone().add(this.dragOffset);
+                        newPos.x = Math.max(-6, Math.min(6, newPos.x));
+                        newPos.z = Math.max(-6, Math.min(6, newPos.z));
+                        newPos.y = Math.max(0.3, newPos.y);
+                        const velocity = newPos.clone().sub(this.draggedObject.mesh.position);
+                        this.velocityHistory.push({ vel: velocity.clone(), time: performance.now() });
+                        if (this.velocityHistory.length > 5) this.velocityHistory.shift();
+                        this.draggedObject.mesh.position.copy(newPos);
+                        this.draggedObject.body.position.copy(newPos);
+                        this.lastDragPos.copy(planeIntersect);
+                    }
+                    return;
+                }
+
+                // Handle dice dragging (original code)
+                if (!this.draggedDie) return;
                 if (planeIntersect) {
                     const newPos = planeIntersect.clone().add(this.dragOffset);
                     newPos.x = Math.max(-3.5, Math.min(3.5, newPos.x));
@@ -2245,6 +2709,44 @@
                 if (!this.isDragging) return;
                 this.isDragging = false;
                 this.updateCursor();
+
+                // Handle object release
+                if (this.draggedObject) {
+                    this.draggedObject.body.type = CANNON.Body.DYNAMIC;
+                    let throwSpeed = 0, avgVel = new THREE.Vector3();
+                    if (this.velocityHistory.length >= 2) {
+                        this.velocityHistory.slice(-4).forEach(v => avgVel.add(v.vel));
+                        avgVel.divideScalar(Math.min(4, this.velocityHistory.length));
+                        throwSpeed = avgVel.length();
+                    }
+                    if (throwSpeed > 0.05) {
+                        const throwMult = this.draggedObject.type === 'coin' ? 40 : 25;
+                        const direction = avgVel.clone().normalize();
+                        const finalVelocity = direction.multiplyScalar(Math.min(throwSpeed * throwMult, 20));
+                        this.draggedObject.body.velocity.set(
+                            finalVelocity.x,
+                            Math.max(1, throwSpeed * 15),
+                            finalVelocity.z
+                        );
+                        const spinMult = this.draggedObject.type === 'coin' ? 50 : 20;
+                        this.draggedObject.body.angularVelocity.set(
+                            (Math.random() - 0.5) * spinMult,
+                            (Math.random() - 0.5) * spinMult,
+                            (Math.random() - 0.5) * spinMult
+                        );
+                        if (this.draggedObject.type === 'coin') {
+                            this.playCoinSound();
+                        } else {
+                            this.playObjectThrowSound();
+                        }
+                    }
+                    this.draggedObject.body.wakeUp();
+                    this.draggedObject = null;
+                    this.velocityHistory = [];
+                    return;
+                }
+
+                // Handle dice release (original code)
                 this.dice.forEach(d => { d.mesh.scale.set(1, 1, 1); d.body.type = CANNON.Body.DYNAMIC; d.body.wakeUp(); });
                 let throwSpeed = 0, avgVel = new THREE.Vector3();
                 if (this.velocityHistory.length >= 2) {
@@ -2565,6 +3067,32 @@
                     die.mesh.position.copy(die.body.position);
                     die.mesh.quaternion.copy(die.body.quaternion);
                 });
+
+                // Sync interactive objects
+                if (this.interactiveObjects) {
+                    this.interactiveObjects.forEach(obj => {
+                        if (!obj.broken) {
+                            obj.mesh.position.copy(obj.body.position);
+                            obj.mesh.quaternion.copy(obj.body.quaternion);
+                        }
+                    });
+                }
+
+                // Update glass shards
+                if (this.glassShards && this.glassShards.length > 0) {
+                    this.glassShards = this.glassShards.filter(shard => {
+                        shard.life -= dt;
+                        if (shard.life <= 0) {
+                            this.scene.remove(shard.mesh);
+                            this.world.removeBody(shard.body);
+                            return false;
+                        }
+                        shard.mesh.position.copy(shard.body.position);
+                        shard.mesh.quaternion.copy(shard.body.quaternion);
+                        shard.mesh.material.opacity = Math.min(0.7, shard.life / 3.0);
+                        return true;
+                    });
+                }
 
                 // Rest check
                 if (this.isRolling) {
