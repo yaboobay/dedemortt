@@ -1212,7 +1212,7 @@
                         tDiffuse: { value: null },
                         time: { value: 0 },
                         vignetteIntensity: { value: 0.4 },
-                        grainIntensity: { value: 0.06 }
+                        grainIntensity: { value: 0.025 }
                     },
                     vertexShader: `
                         varying vec2 vUv;
@@ -1387,16 +1387,16 @@
                 const wallMaterial = new CANNON.Material('wall');
 
                 this.world.addContactMaterial(new CANNON.ContactMaterial(dieMaterial, tableMaterial, {
-                    friction: 0.5,
-                    restitution: 0.35
+                    friction: 0.6,
+                    restitution: 0.3
                 }));
                 this.world.addContactMaterial(new CANNON.ContactMaterial(dieMaterial, wallMaterial, {
-                    friction: 0.2,
-                    restitution: 0.5
+                    friction: 0.25,
+                    restitution: 0.45
                 }));
                 this.world.addContactMaterial(new CANNON.ContactMaterial(dieMaterial, dieMaterial, {
-                    friction: 0.3,
-                    restitution: 0.4
+                    friction: 0.35,
+                    restitution: 0.35
                 }));
 
                 this.dieMaterial = dieMaterial;
@@ -1563,11 +1563,11 @@
                 const body = new CANNON.Body({
                     mass: 1.2,
                     material: this.dieMaterial,
-                    linearDamping: 0.15,
+                    linearDamping: 0.12,
                     angularDamping: 0.15,
                     allowSleep: true,
-                    sleepSpeedLimit: 0.1,
-                    sleepTimeLimit: 0.5
+                    sleepSpeedLimit: 0.08,
+                    sleepTimeLimit: 0.4
                 });
                 body.addShape(this.createIcosahedronShape(0.65));
                 body.position.set(pos.x, pos.y, pos.z);
@@ -2163,7 +2163,7 @@
                 const dt = this.clock.getDelta();
 
                 // Physics
-                this.world.step(1 / 60, dt, 4);
+                this.world.step(1 / 60, dt, 3);
                 if (this.isRolling) this.checkOOB();
                 this.dice.forEach(die => {
                     die.mesh.position.copy(die.body.position);
